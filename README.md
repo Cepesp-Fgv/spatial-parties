@@ -1,3 +1,3 @@
 # Spatial Parties
 
-Spatial Parties description
+Spatial Parties description updated
