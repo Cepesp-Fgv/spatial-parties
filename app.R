@@ -68,7 +68,7 @@ server <- function(input, output) {
 #input$Party <- 15
   
   d <- reactive({
-    d <- cepespdata(year=input$Year,position="Federal Deputy", regional_aggregation="Municipality",political_aggregation="Candidate",state=input$State)
+    d <- cepespdata(year=input$Year,position="Federal Deputy", regional_aggregation="Municipality",political_aggregation="Candidate",state=input$State, cached=TRUE)
     d <- d %>% dplyr::select(NUMERO_PARTIDO, NUMERO_CANDIDATO, COD_MUN_IBGE, QTDE_VOTOS)    
     d <- d %>% complete(NUMERO_CANDIDATO,COD_MUN_IBGE,fill=list(QTDE_VOTOS=0))
     d <- d %>% mutate(NUMERO_PARTIDO=ifelse(is.na(NUMERO_PARTIDO),substr(as.character(NUMERO_CANDIDATO),1,2),NUMERO_PARTIDO))
