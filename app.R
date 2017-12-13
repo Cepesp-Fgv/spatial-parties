@@ -14,6 +14,7 @@ library(mapview)
 library(shinythemes)
 #setwd("C:\\Users\\Jonny\\Google Drive\\Academic\\FGV-SP\\Concentration Paper\\Parties_Spatial_App\\Spatial_Parties")
 
+
 mun <- readRDS("mun2.rds")
 mun_sf <- st_as_sf(mun,crs = 4326)
 
