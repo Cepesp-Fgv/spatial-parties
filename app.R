@@ -65,10 +65,14 @@ server <- function(input, output) {
 #input <- State <- Party <- c() 
 #input$Year <- 2014
 #input$State <- "CE"
-#input$Party <- 15
+#input$Party <- 11
   
   d <- reactive({
-    d <- cepespdata(year=input$Year,position="Federal Deputy", regional_aggregation="Municipality",political_aggregation="Candidate",state=input$State, cached=FALSE)
+    d <- get_elections(year=input$Year,
+                       position=6,
+                       regional_aggregation="Municipality",
+                       political_aggregation="Candidate",
+                       state=input$State)
     d <- d %>% dplyr::select(NUMERO_PARTIDO, NUMERO_CANDIDATO, COD_MUN_IBGE, QTDE_VOTOS)    
     d <- d %>% complete(NUMERO_CANDIDATO,COD_MUN_IBGE,fill=list(QTDE_VOTOS=0))
     d <- d %>% mutate(NUMERO_PARTIDO=ifelse(is.na(NUMERO_PARTIDO),substr(as.character(NUMERO_CANDIDATO),1,2),NUMERO_PARTIDO))
@@ -81,8 +85,10 @@ server <- function(input, output) {
   })
   
   d_party <- reactive({
-    d_party <- d() %>% filter(NUMERO_PARTIDO==input$Party)
-    #d_party <- d %>% filter(NUMERO_PARTIDO==input$Party)
+    d_party <- d() %>% filter(NUMERO_PARTIDO==input$Party) %>%
+      filter(nchar(NUMERO_CANDIDATO)!=2) #And remove vota legenda
+    #d_party <- d %>% filter(NUMERO_PARTIDO==input$Party) %>%
+    #filter(nchar(NUMERO_CANDIDATO)!=2)
   })
   
   d_party_top_5_cands <- reactive({
@@ -193,6 +199,10 @@ mun_state_nb <- reactive({
   #mun_state_nb <- nb_func(mun_state_d_all,input$State)
 })
 
+#mun_state_party_d <- mun_state_d_top_5
+#mun_state_d_nb <- mun_state_nb
+#cands <- party_cands
+
 LISA_func <- function(mun_state_party_d,mun_state_d_nb,cands){
   cand_clusters <- vector("list",length=length(cands))
   
@@ -214,8 +224,12 @@ LISA_func <- function(mun_state_party_d,mun_state_d_nb,cands){
     mun_state_contig$category[mun_state_contig$LISA_p<0.05 & mun_state_contig$LQ_stdzd<=0 & mun_state_contig$LQ_stdzd_lag>=0] <- "Low-High"
     mun_state_contig$category[mun_state_contig$LISA_p<0.05 & mun_state_contig$LQ_stdzd<=0 & mun_state_contig$LQ_stdzd_lag<=0] <- "Low-Low"
     mun_state_contig$category <- as.factor(mun_state_contig$category)
+    if (dim(mun_state_contig[mun_state_contig$category=="High-High",])[1]==0){
+      cand_clusters[[c]] <- NULL  
+    } else {
     cand_clusters[[c]] <- mun_state_contig[mun_state_contig$category=="High-High",]
     cand_clusters[[c]] <- unionSpatialPolygons(cand_clusters[[c]],IDs=cand_clusters[[c]]@data[,"UF"]) #Need to do by cluster...but by UF seems to work, at least for presentational purposes!
+    }
     
   }
   return(cand_clusters)
@@ -230,8 +244,12 @@ output$cluster_map <- renderLeaflet({
     map <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% clearBounds()  
     colours <- c("red","blue","green","yellow","grey")
     
-    for (c in party_cands()){
-      map <- map %>% addPolygons(data=cand_clusters()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands())])
+    party_cands_with_clusters <- party_cands()[party_cands() %in% names(cand_clusters())]
+    #party_cands_with_clusters <- party_cands[party_cands %in% names(cand_clusters)]
+    
+    for (c in party_cands_with_clusters){
+      map <- map %>% addPolygons(data=cand_clusters()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters)])
+      #map <- map %>% addPolygons(data=cand_clusters[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters)])
     }
     
     map
@@ -242,8 +260,12 @@ output$cluster_map2 <- renderLeaflet({
   map <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% clearBounds()  
   colours <- c("red","blue","green","yellow","grey")
   
+  party_cands_with_clusters <- party_cands()[party_cands() %in% names(cand_clusters())]
+  #party_cands_with_clusters <- party_cands[party_cands %in% names(cand_clusters)]
+  
   for (c in party_cands()){
-    map <- map %>% addPolygons(data=cand_clusters()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands())])
+    map <- map %>% addPolygons(data=cand_clusters()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters)])
+    #map <- map %>% addPolygons(data=cand_clusters[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters)])
   }
   
   map
@@ -326,6 +348,7 @@ data_RND_cands <- eventReactive(input$RND_button,{
   data_RND_cands_100 <- vector("list",nsims)
   for (i in 1:nsims){
     data_RND_cands_100[[i]] <- randomize_candidates(d_top10_top5())
+    #data_RND_cands_100[[i]] <- randomize_candidates(d_top10_top5)
   }
   data_RND_cands <- data_RND_cands_100
 })
@@ -372,8 +395,13 @@ output$cluster_map_RND <- renderLeaflet({
   map <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% clearBounds()  
   colours <- c("red","blue","green","yellow","grey")
   
-  for (c in party_cands_RND()){
-    map <- map %>% addPolygons(data=cand_clusters_RND()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_RND())])
+  
+  party_cands_with_clusters_RND <- party_cands_RND()[party_cands_RND() %in% names(cand_clusters_RND())]
+  #party_cands_with_clusters_RND <- party_cands_RND[party_cands_RND %in% names(cand_clusters_RND)]
+  
+  for (c in party_cands_with_clusters_RND){
+    map <- map %>% addPolygons(data=cand_clusters_RND()[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters_RND)])
+    #map <- map %>% addPolygons(data=cand_clusters_RND[[c]],fillOpacity=0.2,weight=2,color=colours[which(c==party_cands_with_clusters_RND)])
   }
   map
 })
